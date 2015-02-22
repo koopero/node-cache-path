@@ -11,7 +11,7 @@ const
 
 function File ( path, context ) {
   this.path = path;
-  this.context = context;
+  this.context = context || {};
 
   path = pathlib.resolve( path );
 
@@ -49,11 +49,16 @@ File.prototype.writeSync = function ( format, data ) {
   format = Format( format );
   this.mkdirSync();
 
-  if ( format.convert && format.convert.to ) {
-    data = format.convert.to( data );
-  }
+  if ( format.isStream ) {
+    throw new Error("Not implemented");
+  } else {
 
-  return this.writeFileSync( data, format.options );
+    if ( format.convert && format.convert.to ) {
+      data = format.convert.to( data );
+    }
+
+    return this.writeFileSync( data, format.options );
+  }
 }
 
 File.prototype.read = function ( format, cb ) {
@@ -86,6 +91,10 @@ File.prototype.readSync = function ( format ) {
   return data;
 }
 
+File.prototype.touchSync = function () {
+  return this.writeSync( String, '' );
+}
+
 File.prototype.mkdir = function ( opt, cb ) {
   return mkdirp.bind( this, this.dirname ).apply( this, arguments );
 }
@@ -94,18 +103,79 @@ File.prototype.mkdirSync = function ( opt ) {
   return mkdirp.sync.bind( this, this.dirname ).apply( this, arguments );
 }
 
+File.prototype.remove = function ( cb ) {
+  var file = this;
+
+  async.series( [
+    file.unlink.bind( file ),
+    file.rmdir.bind( file )
+  ], cb );
+}
+
+File.prototype.removeSync = function ( cb ) {
+  if ( this.isFileSync() ) {
+    this.unlinkSync( );
+    this.rmdirSync( );
+  };
+}
 
 File.prototype.rmdir = function ( cb ) {
+  var
+    file = this,
+    dir = file.fullname,
+    parentFn = file.context.resolveParent || pathlib.dirname
+  ;
+
+  async.whilst(
+    function () {
+      dir = parentFn( dir );
+      return !!dir;
+    },
+    function ( cb ) {
+      fs.rmdir( dir, cb );
+    },
+    function ( err ) {
+      cb();
+    }
+  )
 
 }
 
+File.prototype.rmdirSync = function ( cb ) {
+  var
+    file = this,
+    dir = file.fullname,
+    parentFn = file.context.resolveParent || pathlib.dirname
+  ;
 
-File.prototype.unlink = function ( cb ) {
+  while ( dir = parentFn( dir ) ) {
+    try {
+      fs.rmdirSync( dir );
+    } catch ( exc ) {
+      return false;
+    }
+  }
 
+  return true;
 }
 
-File.prototype.unlink = function ( cb ) {
+File.prototype.isFile = function ( cb ) {
+  this.stat( function ( err, stat ) {
+    if ( err ) {
+      cb( null, false );
+    } else {
+      cb( null, stat.isFile() );
+    }
+  });
+}
 
+File.prototype.isFileSync = function () {
+  try {
+    var stat = this.statSync();
+    return stat.isFile();
+  } catch ( exc ) {
+    return false;
+  }
 }
 
 
@@ -114,6 +184,8 @@ _.each( [
   'readFileSync',
   'writeFile',
   'writeFileSync',
+  'unlink',
+  'unlinkSync',
   'createReadStream'
 ], function bindFsFunc( name ) {
   File.prototype[name] = function () {

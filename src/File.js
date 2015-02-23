@@ -180,6 +180,8 @@ File.prototype.isFileSync = function () {
 
 
 _.each( [
+  'stat',
+  'statSync',
   'readFile',
   'readFileSync',
   'writeFile',

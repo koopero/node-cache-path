@@ -94,7 +94,29 @@ describe('File', function () {
     });
 
     it('should use an external parent function', function () {
-      var context = 
+      var
+        context = {
+          resolveParent: resolveParent
+        },
+        file = testFile( 'scratch/dir/sub/foo', context )
+      ;
+
+      file.touchSync();
+      file.removeSync();
+
+      assertNoFile('scratch/dir/sub/foo' );
+      assertNoFile('scratch/dir/sub' );
+      assertIsDir('scratch/dir' );
+
+      // A really silly mockup of PathTranslate's
+      // destParent function.
+      function resolveParent( name ) {
+        name = endsWith( name, 'scratch/dir/sub/foo' );
+        if ( name )
+          name += 'scratch/dir/sub';
+
+        return name;
+      }
     });
   })
 
@@ -126,11 +148,20 @@ function assertFile( path, contents ) {
 }
 
 function assertNoFile( path ) {
-  if ( fs.exists( localPath( path ) ) ) {
+  if ( fs.existsSync( localPath( path ) ) ) {
     throw new Error( 'Expected '+path+" not to exist." );
   }
 }
 
+function assertIsDir( path ) {
+  var stat = fs.statSync( localPath( path ) );
+  ass( stat.isDirectory() );
+}
+
 function wipeScratch() {
   require('rimraf').sync( localPath('scratch') );
+}
+
+function endsWith( a, b ) {
+  return !b ? a : a.substr( a.length - b.length ) == b ? a.substr( 0, a.length - b.length ) : undefined;
 }
